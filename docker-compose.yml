@@ -1,0 +1,150 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: chatbot-db
+    environment:
+      POSTGRES_USER: chatbot_user
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: chatbot_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chatbot_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chatbot-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: chatbot-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chatbot-network
+
+  chroma:
+    image: ghcr.io/chroma-core/chroma:latest
+    container_name: chatbot-chroma
+    ports:
+      - "8001:8000"
+    environment:
+      ANONYMIZED_TELEMETRY: "false"
+    volumes:
+      - chroma_data:/chroma/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chatbot-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: chatbot-backend
+    environment:
+      DATABASE_URL: postgresql://chatbot_user:changeme@db:5432/chatbot_db
+      REDIS_URL: redis://redis:6379
+      CHROMA_URL: http://chroma:8000
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-test-key}
+      SECRET_KEY: your-secret-key-change-in-production
+      DEBUG: "true"
+      ENVIRONMENT: development
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      chroma:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - uploads:/app/uploads
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - chatbot-network
+
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: chatbot-celery-worker
+    environment:
+      DATABASE_URL: postgresql://chatbot_user:changeme@db:5432/chatbot_db
+      REDIS_URL: redis://redis:6379
+      CHROMA_URL: http://chroma:8000
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-test-key}
+      ENVIRONMENT: development
+    depends_on:
+      - db
+      - redis
+      - chroma
+    volumes:
+      - ./backend:/app
+      - uploads:/app/uploads
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
+    networks:
+      - chatbot-network
+
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: chatbot-flower
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379
+      CELERY_RESULT_BACKEND: redis://redis:6379
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+      - celery_worker
+    command: celery -A app.tasks.celery_app flower --port=5555
+    networks:
+      - chatbot-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: chatbot-frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/.next
+      - /app/node_modules
+    command: npm run dev
+    networks:
+      - chatbot-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  chroma_data:
+  uploads:
+
+networks:
+  chatbot-network:
+    driver: bridge
