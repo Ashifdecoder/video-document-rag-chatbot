@@ -12,14 +12,14 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
-        "postgresql://chatbot_user:changeme@localhost:5432/chatbot_db"
+        "postgresql://chatbot_user:changeme@db:5432/chatbot_db"
     )
 
     # Redis
-    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://redis:6379")
 
     # Chroma Vector DB
-    CHROMA_URL: str = os.getenv("CHROMA_URL", "http://localhost:8001")
+    CHROMA_URL: str = os.getenv("CHROMA_URL", "http://chroma:8000")
 
     # OpenAI
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
@@ -51,13 +51,17 @@ class Settings(BaseSettings):
     SEARCH_TYPE: str = os.getenv("SEARCH_TYPE", "similarity")
 
     # Celery
-    CELERY_BROKER_URL: str = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
-    CELERY_RESULT_BACKEND: str = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
+    CELERY_BROKER_URL: str = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/0")
+    CELERY_RESULT_BACKEND: str = os.getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/0")
 
-    # CORS
+    # CORS Configuration
     CORS_ORIGINS: List[str] = [
         "http://localhost:3000",
+        "http://127.0.0.1:3000",
         "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://frontend:3000",  # Docker internal
+        "*"  # Allow all in development
     ]
     ALLOWED_HOSTS: List[str] = ["*"]
 
