@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: video-audio-rag-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: CHROMA_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+  - type: web
+    name: video-audio-rag-frontend
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
